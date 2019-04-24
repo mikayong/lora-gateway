@@ -68,6 +68,10 @@ int lgw_sx127x_reg_w(uint8_t address, uint8_t reg_value);
 
 int lgw_sx127x_reg_r(uint8_t address, uint8_t *reg_value);
 
+int lg08_sx127x_reg_w(void *spi_target, uint8_t address, uint8_t reg_value);
+int lg08_sx127x_reg_wb(void *spi_target, uint8_t address, uint8_t *reg_value, uint16_t size);
+int lg08_sx127x_reg_r(void *spi_target, uint8_t address, uint8_t reg_value);
+int lg08_sx127x_reg_rb(void *spi_target, uint8_t address, uint8_t *reg_value, uint16_t size);
 
 #endif
 /* --- EOF ------------------------------------------------------------------ */
