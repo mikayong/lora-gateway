@@ -54,7 +54,6 @@ Maintainer: Michael Coracin
 #include "timersync.h"
 #include "parson.h"
 #include "base64.h"
-#include "radio.h"
 #include "loragw_hal.h"
 #include "loragw_gps.h"
 #include "loragw_aux.h"
@@ -74,6 +73,7 @@ Maintainer: Michael Coracin
   #define VERSION_STRING "undefined"
 #endif
 
+#define DEFAULT_SPI_PATH    /dev/spidev0.0
 #define DEFAULT_SERVER      127.0.0.1   /* hostname also supported */
 #define DEFAULT_PORT_UP     1780
 #define DEFAULT_PORT_DW     1782
@@ -130,6 +130,9 @@ static bool fwd_valid_pkt = true; /* packets with PAYLOAD CRC OK are forwarded *
 static bool fwd_error_pkt = false; /* packets with PAYLOAD CRC ERROR are NOT forwarded */
 static bool fwd_nocrc_pkt = false; /* packets with NO PAYLOAD CRC are NOT forwarded */
 
+/* spi device path */
+static char spipath[64] = STR(DEFAULT_SPI_PATH); 
+
 /* network configuration variables */
 static uint64_t lgwm = 0; /* Lora gateway MAC address */
 static char serv_addr[64] = STR(DEFAULT_SERVER); /* address of the server (host name or IPv4/IPv6) */
@@ -155,7 +158,6 @@ static struct timeval pull_timeout = {0, (PULL_TIMEOUT_MS * 1000)}; /* non criti
 /* hardware access control and correction */
 pthread_mutex_t mx_concent = PTHREAD_MUTEX_INITIALIZER; /* control access to the concentrator */
 static pthread_mutex_t mx_xcorr = PTHREAD_MUTEX_INITIALIZER; /* control access to the XTAL correction */
-//pthread_mutex_t mx_sx1276 = PTHREAD_MUTEX_INITIALIZER; /* control access to the sx1276 */
 static bool xtal_correct_ok = false; /* set true when XTAL correction is stable enough */
 static double xtal_correct = 1.0;
 
@@ -237,21 +239,10 @@ static struct lgw_tx_gain_lut_s txlut; /* TX gain table */
 static uint32_t tx_freq_min[LGW_RF_CHAIN_NB]; /* lowest frequency supported by TX chain */
 static uint32_t tx_freq_max[LGW_RF_CHAIN_NB]; /* highest frequency supported by TX chain */
 
-/* TX RADIO sx1276 */
-radiodev *sxradio;
-static bool sx1276 = false;
-static char server_type[16] = "server_type";
-
 /* -------------------------------------------------------------------------- */
 /* --- PRIVATE FUNCTIONS DECLARATION ---------------------------------------- */
 
 static void sig_handler(int sigio);
-
-static char uci_config_file[32] = "/etc/config/gateway";
-
-static struct uci_context * ctx = NULL; 
-
-static bool get_config(const char *section, char *option, int len);
 
 static int parse_SX1301_configuration(const char * conf_file);
 
@@ -283,36 +274,6 @@ static void sig_handler(int sigio) {
         exit_sig = true;
     }
     return;
-}
-
-static bool get_config(const char *section, char *option, int len) {
-    struct uci_package * pkg = NULL;
-    struct uci_element *e;
-    const char *value;
-    bool ret = false;
-
-    ctx = uci_alloc_context(); 
-    if (UCI_OK != uci_load(ctx, uci_config_file, &pkg))  
-        goto cleanup;   /* load uci conifg failed*/
-
-    uci_foreach_element(&pkg->sections, e)
-    {
-        struct uci_section *st = uci_to_section(e);
-
-        if(!strcmp(section, st->e.name))  /* compare section name */ {
-            if (NULL != (value = uci_lookup_option_string(ctx, st, option))) {
-	         memset(option, 0, len);
-                 strncpy(option, value, len); 
-                 ret = true;
-                 break;
-            }
-        }
-    }
-    uci_unload(ctx, pkg); /* free pkg which is UCI package */
-cleanup:
-    uci_free_context(ctx);
-    ctx = NULL;
-    return ret;
 }
 
 static int parse_SX1301_configuration(const char * conf_file) {
@@ -725,6 +686,13 @@ static int parse_gateway_configuration(const char * conf_file) {
         return -1;
     } else {
         MSG_DEBUG(DEBUG_INFO, "INFO~ %s does contain a JSON object named %s, parsing gateway parameters\n", conf_file, conf_obj_name);
+    }
+
+    /* spi dev path */
+    str = json_object_get_string(conf_obj, "spi_dev_path");
+    if (str != NULL) {
+        strncpy(spipath, str, sizeof spipath);
+        MSG_DEBUG(DEBUG_INFO, "INFO~ spi device path is configured to \"%s\"\n", spipath);
     }
 
     /* gateway unique identifier (aka MAC address) (optional) */
@@ -1229,41 +1197,9 @@ int main(void)
 
     /* init transifer radio device */
     /* spi-gpio-custom bus0=1,24,18,20,0,8000000,19 bus1=2,22,14,26,0,8000000,21 */
-    char sx1276_tx[8] = "sx1276";
-    char sx1276_txpw[8] = "sxtxpw";
-    char model[8] = "model";
-
-    get_config("general", sx1276_tx, sizeof(sx1276_tx));
-    get_config("general", sx1276_txpw, sizeof(sx1276_txpw));
-    get_config("general", model, sizeof(model));
-
-    MSG_DEBUG(DEBUG_LOG, "INFO~ sx1276:%d, sxtxpw:%d, model:%s\n", atoi(sx1276_tx), atoi(sx1276_txpw), model);
-
-    /* mqtt or lorawan */
-    get_config("general", server_type, sizeof(server_type));
-
-    /* only LG08P with sx1276 */
-
-    if (!strcmp(model, "LG08P") && atoi(sx1276_tx) > 0) {
-
-        sxradio = (radiodev *) malloc(sizeof(radiodev));
-        sxradio->nss = 21;
-        sxradio->rst = 12;
-        sxradio->dio[0] = 7;
-        sxradio->dio[1] = 6;
-        sxradio->dio[2] = 8;
-        sxradio->rf_power = (atoi(sx1276_txpw) > 0 && atoi(sx1276_txpw) <= 20) ? atoi(sx1276_txpw) : 0; /* sx1276 power < 20 */
-        strcpy(sxradio->desc, "SPI_DEV_RADIO");
-        sxradio->spiport = spi_open(SPI_DEV_RADIO);
-
-        if(get_radio_version(sxradio))
-            sx1276 = true;
-        else
-            free(sxradio);
-    }
 
     /* starting the concentrator */
-    i = lgw_start();
+    i = lgw_start(spipath);
     if (i == LGW_HAL_SUCCESS) {
         MSG_DEBUG(DEBUG_INFO, "INFO~ [main] concentrator started, packet can now be received\n");
     } else {
@@ -1446,7 +1382,7 @@ int main(void)
             printf("REPORT~ # SX1301 time (PPS): %u\n", trig_tstamp);
         }
         jit_print_queue (&jit_queue, false, DEBUG_LOG);
-        MSG_DEBUG(DEBUG_GPS, "### [GPS] ###\n");
+        printf("### [GPS] ###\n");
         if (gps_enabled == true) {
             /* no need for mutex, display is not critical */
             if (gps_ref_valid == true) {
@@ -1455,16 +1391,16 @@ int main(void)
                 MSG_DEBUG(DEBUG_GPS, "# Invalid time reference (age: %li sec)\n", (long)difftime(time(NULL), time_reference_gps.systime));
             }
             if (coord_ok == true) {
-                MSG_DEBUG(DEBUG_GPS, "# GPS coordinates: latitude %.5f, longitude %.5f, altitude %i m\n", cp_gps_coord.lat, cp_gps_coord.lon, cp_gps_coord.alt);
+                printf("# GPS coordinates: latitude %.5f, longitude %.5f, altitude %i m\n", cp_gps_coord.lat, cp_gps_coord.lon, cp_gps_coord.alt);
             } else {
-                MSG_DEBUG(DEBUG_GPS, "# no valid GPS coordinates available yet\n");
+                printf("# no valid GPS coordinates available yet\n");
             }
         } else if (gps_fake_enable == true) {
             MSG_DEBUG(DEBUG_GPS, "# GPS *FAKE* coordinates: latitude %.5f, longitude %.5f, altitude %i m\n", cp_gps_coord.lat, cp_gps_coord.lon, cp_gps_coord.alt);
         } else {
             MSG_DEBUG(DEBUG_GPS, "# GPS sync is disabled\n");
         }
-        MSG_DEBUG(DEBUG_GPS, "##### END #####\n");
+        printf("##### END #####\n");
 
         /* generate a JSON report (will be sent to server by upstream thread) */
         pthread_mutex_lock(&mx_stat_rep);
@@ -1509,8 +1445,6 @@ int main(void)
     }
 
     MSG_DEBUG(DEBUG_INFO, "INFO~ Exiting packet forwarder program\n");
-    if (sxradio)
-        free(sxradio);
     exit(EXIT_SUCCESS);
 }
 
@@ -1957,7 +1891,7 @@ void thread_up(void) {
                 //MSG_DEBUG(DEBUG_WARNING, "WARNING: [up] ignored out-of sync ACK packet\n");
                 continue;
             } else {
-                MSG_DEBUG(DEBUG_INFO, "INFO~ [up] PUSH_ACK received in %i ms\n", (int)(1000 * difftimespec(recv_time, send_time)));
+                MSG_DEBUG(DEBUG_WARNING, "INFO~ [up] PUSH_ACK received in %i ms\n", (int)(1000 * difftimespec(recv_time, send_time)));
                 meas_up_ack_rcv += 1;
                 break;
             }
@@ -2710,78 +2644,38 @@ void thread_jit(void) {
                         MSG_DEBUG(DEBUG_INFO, "INFO~ Beacon dequeued (count_us=%u)\n", pkt.count_us);
                     }
 
-                    /* send packet to concentrator */
-                    if (sx1276) {
-                        //pthread_mutex_lock(&mx_sx1276);
-
-                        gettimeofday(&current_unix_time, NULL);
-                        get_concentrator_time(&current_concentrator_time, current_unix_time);
-                        time_us = current_concentrator_time.tv_sec * 1000000UL + current_concentrator_time.tv_usec;
-
-                        diff_us = pkt.count_us - time_us - 1495/*START_DELAY*/;
-
-                        MSG_DEBUG(DEBUG_JIT, "JITINFO~ pending TX count_us=%u, now_us=%u, diff=%u, waitms=%d\n",
-                                        pkt.count_us,
-                                        time_us,
-                                        pkt.count_us - time_us,
-                                        diff_us);
-                        
-
-                        if (pkt.tx_mode != IMMEDIATE && diff_us > 0 && diff_us < 30000/*JIT_START_DELAY*/)
-                            wait_us(diff_us);
-
-                        /*
-                        gettimeofday(&current_unix_time, NULL);
-                        get_concentrator_time(&current_concentrator_time, current_unix_time);
-                        time_us = current_concentrator_time.tv_sec * 1000000UL + current_concentrator_time.tv_usec;
-
-                        printf("JITINFO~ start TX  now_us=%u, count_us=%u, diff_us=%u, diff=%u\n",
-                                    time_us,
-                                    pkt.count_us,
-                                    diff_us,
-                                    time_us - pkt.count_us);
-                        */
-                        
-
-                        txlora(sxradio, &pkt); 
-
+                    /* check if concentrator is free for sending new packet */
+                    pthread_mutex_lock(&mx_concent); /* may have to wait for a fetch to finish */
+                    result = lgw_status(TX_STATUS, &tx_status);
+                    pthread_mutex_unlock(&mx_concent); /* free concentrator ASAP */
+                    if (result == LGW_HAL_ERROR) {
+                        MSG_DEBUG(DEBUG_WARNING, "WARNING: [jit] lgw_status failed\n");
+                    } else {
+                        if (tx_status == TX_EMITTING) {
+                            MSG_DEBUG(DEBUG_ERROR, "ERROR~ concentrator is currently emitting\n");
+                            print_tx_status(tx_status);
+                            continue;
+                        } else if (tx_status == TX_SCHEDULED) {
+                            MSG_DEBUG(DEBUG_WARNING, "WARNING: a downlink was already scheduled, overwritting it...\n");
+                            print_tx_status(tx_status);
+                        } else {
+                            /* Nothing to do */
+                        }
+                    }
+                    pthread_mutex_lock(&mx_concent); /* may have to wait for a fetch to finish */
+                    result = lgw_send(pkt);
+                    pthread_mutex_unlock(&mx_concent); /* free concentrator ASAP */
+                    if (result == LGW_HAL_ERROR) {
+                        pthread_mutex_lock(&mx_meas_dw);
+                        meas_nb_tx_fail += 1;
+                        pthread_mutex_unlock(&mx_meas_dw);
+                        MSG_DEBUG(DEBUG_WARNING, "WARNING: [jit] lgw_send failed\n");
+                        continue;
+                    } else {
                         pthread_mutex_lock(&mx_meas_dw);
                         meas_nb_tx_ok += 1;
                         pthread_mutex_unlock(&mx_meas_dw);
-                    } else { 
-                        /* check if concentrator is free for sending new packet */
-                        pthread_mutex_lock(&mx_concent); /* may have to wait for a fetch to finish */
-                        result = lgw_status(TX_STATUS, &tx_status);
-                        pthread_mutex_unlock(&mx_concent); /* free concentrator ASAP */
-                        if (result == LGW_HAL_ERROR) {
-                            MSG_DEBUG(DEBUG_WARNING, "WARNING: [jit] lgw_status failed\n");
-                        } else {
-                            if (tx_status == TX_EMITTING) {
-                                MSG_DEBUG(DEBUG_ERROR, "ERROR~ concentrator is currently emitting\n");
-                                print_tx_status(tx_status);
-                                continue;
-                            } else if (tx_status == TX_SCHEDULED) {
-                                MSG_DEBUG(DEBUG_WARNING, "WARNING: a downlink was already scheduled, overwritting it...\n");
-                                print_tx_status(tx_status);
-                            } else {
-                                /* Nothing to do */
-                            }
-                        }
-                        pthread_mutex_lock(&mx_concent); /* may have to wait for a fetch to finish */
-                        result = lgw_send(pkt);
-                        pthread_mutex_unlock(&mx_concent); /* free concentrator ASAP */
-                        if (result == LGW_HAL_ERROR) {
-                            pthread_mutex_lock(&mx_meas_dw);
-                            meas_nb_tx_fail += 1;
-                            pthread_mutex_unlock(&mx_meas_dw);
-                            MSG_DEBUG(DEBUG_WARNING, "WARNING: [jit] lgw_send failed\n");
-                            continue;
-                        } else {
-                            pthread_mutex_lock(&mx_meas_dw);
-                            meas_nb_tx_ok += 1;
-                            pthread_mutex_unlock(&mx_meas_dw);
-                            //MSG_DEBUG(DEBUG_PKT_FWD, "lgw_send done: count_us=%u\n", pkt.count_us);
-                        }
+                        //MSG_DEBUG(DEBUG_PKT_FWD, "lgw_send done: count_us=%u\n", pkt.count_us);
                     }
                     
                 } else {

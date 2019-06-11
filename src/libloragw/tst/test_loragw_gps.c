@@ -36,6 +36,8 @@ Maintainer: Michael Coracin
 #include "loragw_gps.h"
 #include "loragw_aux.h"
 
+#define SPI_DEV_PATH  /dev/spidev1.0
+
 /* -------------------------------------------------------------------------- */
 /* --- PRIVATE VARIABLES ---------------------------------------------------- */
 
@@ -184,7 +186,7 @@ int main()
     rfconf.tx_enable = true;
     lgw_rxrf_setconf(0, rfconf);
 
-    lgw_start();
+    lgw_start(SPI_DEV_PATH);
 
     /* initialize some variables before loop */
     memset(serial_buff, 0, sizeof serial_buff);

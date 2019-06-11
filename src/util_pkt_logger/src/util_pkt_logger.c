@@ -359,6 +359,7 @@ void open_log(void) {
         MSG("ERROR: impossible to write to log file %s\n", log_file_name);
         exit(EXIT_FAILURE);
     }
+    fprintf(stdout, "\"gateway ID\",\"node MAC\",\"UTC timestamp\",\"us count\",\"frequency\",\"RF chain\",\"RX chain\",\"status\",\"size\",\"RSSI\",\"SNR\"\n");
 
     MSG("INFO: Now writing to log file %s\n", log_file_name);
     return;
@@ -499,12 +500,12 @@ int main(int argc, char **argv)
 
             /* writing node MAC address */
             fputs("\"\",", log_file); // TODO: need to parse payload
-            fputs("\"\",", stdou); // TODO: need to parse payload
+            fputs("\"\",", stdout); // TODO: need to parse payload
 
             /* writing UTC timestamp*/
             fprintf(log_file, "\"%s\",", fetch_timestamp);
-            fprintf(stdout, "\"%s\",", fetch_timestamp);
             // TODO: replace with GPS time when available
+            fprintf(stdout, "\"%s\",", fetch_timestamp);
 
             /* writing internal clock */
             fprintf(log_file, "%10u,", p->count_us);
@@ -516,9 +517,11 @@ int main(int argc, char **argv)
 
             /* writing RF chain */
             fprintf(log_file, "%u,", p->rf_chain);
+            fprintf(stdout, "%u,", p->rf_chain);
 
             /* writing RX modem/IF chain */
             fprintf(log_file, "%2d,", p->if_chain);
+            fprintf(stdout, "%2d,", p->if_chain);
 
             /* writing status */
             switch(p->status) {
@@ -531,6 +534,7 @@ int main(int argc, char **argv)
 
             /* writing payload size */
             fprintf(log_file, "%3u,", p->size);
+            fprintf(stdout, "%3u,", p->size);
 
             /* writing modulation */
             switch(p->modulation) {
@@ -597,7 +601,7 @@ int main(int argc, char **argv)
             /* end of log file line */
             fputs("\"\n", log_file);
             fflush(log_file);
-            fputs("\"\n", stdout);
+            fputs("\n", stdout);
             fflush(stdout);
             ++pkt_in_log;
         }

@@ -46,6 +46,8 @@ Maintainer: Sylvain Miermont
 #define DEFAULT_RSSI_OFFSET 0.0
 #define DEFAULT_NOTCH_FREQ  129000U
 
+#define SPI_DEV_PATH    /dev/spidev0.0
+
 /* -------------------------------------------------------------------------- */
 /* --- PRIVATE VARIABLES ---------------------------------------------------- */
 
@@ -303,7 +305,7 @@ int main(int argc, char **argv)
 */
 
     /* connect, configure and start the LoRa concentrator */
-    i = lgw_start();
+    i = lgw_start(SPI_DEV_PATH);
     if (i == LGW_HAL_SUCCESS) {
         printf("*** Concentrator started ***\n");
     } else {

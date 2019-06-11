@@ -30,6 +30,9 @@ Maintainer: Michael Coracin
 
 #define SX125x_32MHz_FRAC 15625 /* irreductible fraction for PLL register caculation */
 
+/* -------------------------------------------------------------------------- */
+/* --- PUBLIC CONSTANTS ----------------------------------------------------- */
+
 enum lgw_sx127x_rxbw_e {
     LGW_SX127X_RXBW_2K6_HZ,
     LGW_SX127X_RXBW_3K1_HZ,
@@ -65,10 +68,6 @@ int lgw_sx127x_reg_w(uint8_t address, uint8_t reg_value);
 
 int lgw_sx127x_reg_r(uint8_t address, uint8_t *reg_value);
 
-int lg08_sx127x_reg_w(void *spi_target, uint8_t address, uint8_t reg_value);
-int lg08_sx127x_reg_wb(void *spi_target, uint8_t address, uint8_t *reg_value, uint16_t size);
-int lg08_sx127x_reg_r(void *spi_target, uint8_t address, uint8_t reg_value);
-int lg08_sx127x_reg_rb(void *spi_target, uint8_t address, uint8_t *reg_value, uint16_t size);
 
-#endif    /* END of _LORAGW_RADIO_H */
+#endif
 /* --- EOF ------------------------------------------------------------------ */

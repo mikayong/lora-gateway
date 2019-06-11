@@ -37,7 +37,7 @@ Maintainer: Sylvain Miermont
 /* -------------------------------------------------------------------------- */
 /* --- MAIN FUNCTION -------------------------------------------------------- */
 
-int main()
+int main(int argc, char *argv[])
 {
     int i;
     void *spi_target = NULL;
@@ -46,13 +46,18 @@ int main()
     uint8_t datain[BURST_TEST_SIZE];
     uint8_t spi_mux_mode = LGW_SPI_MUX_MODE0;
 
+    if (argc < 2) {
+        printf("NEED OPTION SPIDEVPATH!\n");
+        return -1;
+    }
+
     for (i = 0; i < BURST_TEST_SIZE; ++i) {
         dataout[i] = 0x30 + (i % 10); /* ASCCI code for 0 -> 9 */
         datain[i] = 0x23; /* garbage data, to be overwritten by received data */
     }
 
     printf("Beginning of test for loragw_spi.c\n");
-    lgw_spi_open(&spi_target);
+    lgw_spi_open(&spi_target, argv[1]);
 
     /* normal R/W test */
     for (i = 0; i < TIMING_REPEAT; ++i)

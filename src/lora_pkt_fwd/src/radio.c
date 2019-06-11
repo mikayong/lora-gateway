@@ -11,6 +11,21 @@
 
 #include "radio.h"
 
+#include <stdio.h>
+#include <string.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <unistd.h>
+#include <errno.h>
+#include <time.h>
+
+#include <linux/spi/spidev.h>
+#include <sys/ioctl.h>
+
+#include "loragw_hal.h"
+
 extern int32_t lgw_sf_getval(int x);
 extern int32_t lgw_bw_getval(int x);
 

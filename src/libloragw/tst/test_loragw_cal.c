@@ -55,6 +55,8 @@ Maintainer: Sylvain Miermont
 #define RAM_SIZE                4096
 #define FREQ_SIG_NORM           0.078125
 
+#define SPI_DEV_PATH    /dev/spidev1.0
+
 /* -------------------------------------------------------------------------- */
 /* --- PRIVATE VARIABLES ---------------------------------------------------- */
 
@@ -263,7 +265,7 @@ int main(int argc, char **argv)
     printf("Number of calibration iterations: %d\n",nb_cal);
     printf("Calibration command: brd: %d, chip: %d, dac: %d\n\n", cal_cmd >> 6, 1257-2*((cal_cmd & 0x20) >> 5), 2+((cal_cmd & 0x10) >> 4));
 
-    x = lgw_connect(false, DEFAULT_TX_NOTCH_FREQ);
+    x = lgw_connect(false, DEFAULT_TX_NOTCH_FREQ, SPI_DEV_PATH);
     if (x == -1) {
         printf("ERROR: FAIL TO CONNECT BOARD\n");
         return -1;

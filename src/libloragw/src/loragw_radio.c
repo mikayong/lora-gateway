@@ -482,26 +482,10 @@ int lgw_sx127x_reg_w(uint8_t address, uint8_t reg_value) {
     return lgw_spi_w(lgw_spi_target, LGW_SPI_MUX_MODE1, LGW_SPI_MUX_TARGET_SX127X, address, reg_value);
 }
 
-int lg08_sx127x_reg_w(void *spi_target, uint8_t address, uint8_t reg_value) {
-    return lgw_spi_w(spi_target, LGW_SPI_MUX_MODE0, LGW_SPI_MUX_TARGET_SX127X, address, reg_value);
-}
-
-int lg08_sx127x_reg_wb(void *spi_target, uint8_t address, uint8_t *reg_value, uint16_t size) {
-    return lgw_spi_wb(spi_target, LGW_SPI_MUX_MODE0, LGW_SPI_MUX_TARGET_SX127X, address, reg_value, size);
-}
-
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
 int lgw_sx127x_reg_r(uint8_t address, uint8_t *reg_value) {
     return lgw_spi_r(lgw_spi_target, LGW_SPI_MUX_MODE1, LGW_SPI_MUX_TARGET_SX127X, address, reg_value);
-}
-
-int lg08_sx127x_reg_r(void *spi_target, uint8_t address, uint8_t reg_value) {
-    return lgw_spi_r(spi_target, LGW_SPI_MUX_MODE0, LGW_SPI_MUX_TARGET_SX127X, address, reg_value);
-}
-
-int lg08_sx127x_reg_rb(void *spi_target, uint8_t address, uint8_t *reg_value, uint16_t size) {
-    return lgw_spi_rb(spi_target, LGW_SPI_MUX_MODE0, LGW_SPI_MUX_TARGET_SX127X, address, reg_value, size);
 }
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
